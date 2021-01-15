@@ -48,7 +48,7 @@ loop1:     lda     rf                  ; look for first less <= space
            ldn     rf                  ; get byte from argument
            lbnz    good                ; jump if filename given
            sep     scall               ; otherwise display usage message
-           dw      f_inmsg
+           dw      o_inmsg
            db      'Usage: type filename',10,13,0
            sep     sret                ; and return to os
 good:      ldi     high fildes         ; get file descriptor
