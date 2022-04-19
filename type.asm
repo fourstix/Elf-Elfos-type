@@ -6,24 +6,19 @@
 ; *** without express written permission from the author.         ***
 ; *******************************************************************
 
+.op "PUSH","N","9$1 73 8$1 73"
+.op "POP","N","60 72 A$1 F0 B$1"
+.op "CALL","W","D4 H1 L1"
+.op "RTN","","D5"
+.op "MOV","NR","9$2 B$1 8$2 A$1"
+.op "MOV","NW","F8 H2 B$1 F8 L2 A$1"
+
 include    bios.inc
 include    kernel.inc
 
-           org     8000h
-           lbr     0ff00h
-           db      'type',0
-           dw      9000h
-           dw      endrom+7000h
-           dw      2000h
-           dw      endrom-2000h
-           dw      2000h
-           db      0
- 
            org     2000h
-           br      start
-
-include    date.inc
-include    build.inc
+begin:     br      start
+           eever
            db      'Written by Michael H. Riley',0
 
 start:
@@ -50,6 +45,7 @@ loop1:     lda     rf                  ; look for first less <= space
            sep     scall               ; otherwise display usage message
            dw      o_inmsg
            db      'Usage: type filename',10,13,0
+           ldi     0ah
            sep     sret                ; and return to os
 good:      ldi     high fildes         ; get file descriptor
            phi     rd
@@ -59,14 +55,17 @@ good:      ldi     high fildes         ; get file descriptor
            plo     r7
            sep     scall               ; attempt to open file
            dw      o_open
-           lbnf    mainlp              ; jump if file was opened
+           lbnf    main                ; jump if file was opened
            ldi     high errmsg         ; get error message
            phi     rf
            ldi     low errmsg
            plo     rf
            sep     scall               ; display it
            dw      o_msg
-           lbr     o_wrmboot           ; and return to os
+           ldi     0ch
+           sep     sret                ; and return to os
+main:      ldi     23                  ; 23 lines before pausing
+           plo     r9
 mainlp:    ldi     0                   ; want to read 16 bytes
            phi     rc
            ldi     16
@@ -84,15 +83,33 @@ mainlp:    ldi     0                   ; want to read 16 bytes
            ldi     low buffer
            plo     r8
 linelp:    lda     r8                  ; get next byte
+           stxd                        ; save a copy
            sep     scall 
            dw      o_type
-           dec     rc                  ; decrement read count
+           irx                         ; recover character
+           ldx
+           smi     13                  ; check for carriage return
+           lbnz    linelp2             ; jump if not
+           dec     r9                  ; decrement line count
+           glo     r9                  ; see if full page
+           lbnz    linelp2             ; jump if not
+           call    o_inmsg             ; display more message
+           db      10,'-MORE-',0
+           call    o_readkey           ; check keys
+           smi     3                   ; check for <CTRL><C>
+           lbz     done                ; exit if <ESC> is pressed
+           call    o_inmsg             ; display cr/lf
+           db      10,13,0
+           ldi     23                  ; reset line count
+           plo     r9
+linelp2:   dec     rc                  ; decrement read count
            glo     rc                  ; see if done
            lbnz    linelp              ; loop back if not
            lbr     mainlp              ; and loop back til done
 
 done:      sep     scall               ; close the file
            dw      o_close
+           ldi     0
            sep     sret                ; return to os
 
 
@@ -109,7 +126,10 @@ fildes:    db      0,0,0,0
 
 endrom:    equ     $
 
+.suppress
+
 buffer:    ds      20
 cbuffer:   ds      80
 dta:       ds      512
 
+           end     begin
