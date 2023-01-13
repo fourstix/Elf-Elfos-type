@@ -13,8 +13,8 @@
 .op "MOV","NR","9$2 B$1 8$2 A$1"
 .op "MOV","NW","F8 H2 B$1 F8 L2 A$1"
 
-include    bios.inc
-include    kernel.inc
+#include   bios.inc
+#include   kernel.inc
 
            org     2000h
 begin:     br      start
@@ -64,13 +64,15 @@ good:      ldi     high fildes         ; get file descriptor
            dw      o_msg
            ldi     0ch
            sep     sret                ; and return to os
-main:      ldi     23                  ; 23 lines before pausing
+main:      ldi     0                   ; clear out skip character
+           phi     r9       
+           ldi     23                  ; 23 lines before pausing
            plo     r9
 mainlp:    ldi     0                   ; want to read 16 bytes
            phi     rc
            ldi     16
            plo     rc 
-           ldi     high buffer         ; buffer to rettrieve data
+           ldi     high buffer         ; buffer to retrieve data
            phi     rf
            ldi     low buffer
            plo     rf
@@ -78,7 +80,7 @@ mainlp:    ldi     0                   ; want to read 16 bytes
            dw      o_read
            glo     rc                  ; check for zero bytes read
            lbz     done                ; jump if so
-           ldi     high buffer         ; buffer to rettrieve data
+           ldi     high buffer         ; buffer to retrieve data
            phi     r8
            ldi     low buffer
            plo     r8
@@ -87,10 +89,21 @@ linelp:    lda     r8                  ; get next byte
            sep     scall 
            dw      o_type
            irx                         ; recover character
-           ldx
-           smi     13                  ; check for carriage return
-           lbnz    linelp2             ; jump if not
-           dec     r9                  ; decrement line count
+           ghi     r9                  ; get skip character
+           lbz     cont                ; continue on if no skip character
+           sm                          ; check if this is skip character
+           lbz     skipped             ; jump if skipped
+cont:      ldx                         ; get character to check for eol
+           smi     10                  ; check for lf (0ah)
+           lbnz    chk_cr              ; if not lf check for cr  
+           ldi     13                  ; skip next char if cr  (eol: lf,cr)    
+           phi     r9              
+           lbr     newline             ; process new line
+chk_cr:    smi     3                   ; check for cr (0dh - 0ah = 3)
+           lbnz    linelp2             ; jump if not cr
+           ldi     10                  ; skip next char if lf (eol: cr,lf)
+           phi     r9        
+newline:   dec     r9                  ; decrement line count
            glo     r9                  ; see if full page
            lbnz    linelp2             ; jump if not
            call    o_inmsg             ; display more message
@@ -102,6 +115,8 @@ linelp:    lda     r8                  ; get next byte
            db      10,13,0
            ldi     23                  ; reset line count
            plo     r9
+skipped:   ldi     0
+           phi     r9           
 linelp2:   dec     rc                  ; decrement read count
            glo     rc                  ; see if done
            lbnz    linelp              ; loop back if not
